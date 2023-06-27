@@ -30,6 +30,7 @@ import org.axonframework.serialization.Serializer
 import org.axonframework.tracing.MultiSpanFactory
 import org.axonframework.tracing.SpanFactory
 import org.axonframework.tracing.opentelemetry.OpenTelemetrySpanFactory
+import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.config.BeanPostProcessor
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.ComponentScan
@@ -44,6 +45,7 @@ import org.axonframework.config.Configuration as AxonConfiguration
 @Configuration
 @ComponentScan("com.insidion.axon.microscope")
 class AxonMicroscopeAutoConfiguration {
+    private val logger = LoggerFactory.getLogger("Microscope")
     private val interceptor = MessageDispatchInterceptor { _ -> BiFunction { _, m: Message<*> -> m.andMetaData(mapOf(METADATA_FIELD to System.currentTimeMillis())) } }
 
     @Bean
@@ -66,9 +68,11 @@ class AxonMicroscopeAutoConfiguration {
                 instrument(bean, metricFactory, spanFactory)
             }
             if (bean is Serializer && bean !is MicroscopeSerializerDecorator) {
+                logger.info("Decorating {} of type {} for Microscope!", beanName, bean::class.java.simpleName)
                 return MicroscopeSerializerDecorator(bean, metricFactory, spanFactory)
             }
             if (bean is TokenStore && bean !is MicroscopeTokenStoreDecorator) {
+                logger.info("Decorating {} of type {} for Microscope!", beanName, bean::class.java.simpleName)
                 return MicroscopeTokenStoreDecorator(bean, metricFactory)
             }
             return bean

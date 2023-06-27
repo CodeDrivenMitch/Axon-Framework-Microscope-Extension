@@ -5,7 +5,7 @@ import io.micrometer.core.instrument.Tags
 import org.axonframework.serialization.SerializedObject
 import org.axonframework.serialization.Serializer
 import org.axonframework.tracing.SpanFactory
-import java.time.Duration
+import java.util.concurrent.TimeUnit
 import java.util.function.Supplier
 
 class MicroscopeSerializerDecorator(
@@ -26,8 +26,8 @@ class MicroscopeSerializerDecorator(
                     val data = result.data
                     if (data is ByteArray) {
                         metricFactory.createTimer("${delegate.javaClass.simpleName}.messageSize",
-                                Tags.of(Tag.of("target", expectedRepresentation.simpleName)))
-                                .record(Duration.ofSeconds(data.size.toLong()))
+                                Tags.of(Tag.of("messageType", obj?.javaClass?.simpleName ?: "null")))
+                                .record(data.size.toLong(), TimeUnit.SECONDS)
                     }
 
                     result
@@ -41,7 +41,7 @@ class MicroscopeSerializerDecorator(
                             Tags.of(Tag.of("type", serializedObject.type.name)))
                             .record(Supplier {
                                 delegate.deserialize(serializedObject)
-                            })!!
+                            })
                 }
     }
 }
