@@ -4,11 +4,11 @@
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
 
     <parent>
-        <groupId>com.insidion</groupId>
+        <groupId>com.insidion.axon.microscope</groupId>
         <artifactId>axon-framework-microscope-extension-parent</artifactId>
         <version>0.0.1-SNAPSHOT</version>
     </parent>
-    <artifactId>axon-framework-microscope-extension-starter</artifactId>
+    <artifactId>axon-microscope-starter</artifactId>
     <name>Microscope Extension Starter</name>
 
     <version>0.0.1-SNAPSHOT</version>
@@ -22,6 +22,22 @@
             <artifactId>axon-spring-boot-starter</artifactId>
             <version>${axon.version}</version>
             <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.axonframework</groupId>
+            <artifactId>axon-tracing-opentelemetry</artifactId>
+            <version>${axon.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.axonframework</groupId>
+            <artifactId>axon-metrics</artifactId>
+            <version>${axon.version}</version>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.axonframework</groupId>
+            <artifactId>axon-micrometer</artifactId>
+            <version>${axon.version}</version>
         </dependency>
         <dependency>
             <groupId>io.micrometer</groupId>
