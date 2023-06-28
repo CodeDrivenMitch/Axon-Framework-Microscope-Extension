@@ -2,9 +2,13 @@ package com.insidion.axon.microscope
 
 import com.insidion.axon.microscope.InstrumentUtils.METADATA_FIELD
 import com.insidion.axon.microscope.InstrumentUtils.instrument
+import io.grpc.*
+import io.grpc.ForwardingClientCallListener.SimpleForwardingClientCallListener
 import io.micrometer.core.instrument.MeterRegistry
+import io.micrometer.core.instrument.Tag
 import io.micrometer.core.instrument.Tags
 import io.micrometer.core.instrument.Timer
+import org.axonframework.axonserver.connector.ManagedChannelCustomizer
 import org.axonframework.axonserver.connector.command.AxonServerCommandBus
 import org.axonframework.axonserver.connector.query.AxonServerQueryBus
 import org.axonframework.commandhandling.CommandBus
@@ -76,6 +80,34 @@ class AxonMicroscopeAutoConfiguration {
                 return MicroscopeTokenStoreDecorator(bean, metricFactory)
             }
             return bean
+        }
+    }
+
+    @Bean
+    fun channelCustomizer(metricFactory: MicroscopeMetricFactory,
+                          spanFactory: SpanFactory): ManagedChannelCustomizer {
+        return ManagedChannelCustomizer { t ->
+            t.intercept(object : ClientInterceptor {
+                override fun <ReqT : Any?, RespT : Any?> interceptCall(method: MethodDescriptor<ReqT, RespT>, callOptions: CallOptions?, next: Channel): ClientCall<ReqT, RespT> {
+                    val span = spanFactory.createInternalSpan { """Grpc ${method.type.name} ${method.fullMethodName}""" }
+                    val startTime = System.currentTimeMillis()
+                    return object : ForwardingClientCall.SimpleForwardingClientCall<ReqT, RespT>(next.newCall(method, callOptions)) {
+                        override fun start(responseListener: Listener<RespT>, headers: io.grpc.Metadata?) {
+                            span.start()
+                            super.start(object : SimpleForwardingClientCallListener<RespT>(responseListener) {
+
+                                override fun onClose(status: Status?, trailers: io.grpc.Metadata?) {
+                                    span.end()
+                                    metricFactory.createTimer("grpc_duration",
+                                            Tags.of(Tag.of("method", method.fullMethodName), Tag.of("type", method.type.name))
+                                    ).record(Duration.ofMillis(System.currentTimeMillis() - startTime))
+                                    super.onClose(status, trailers)
+                                }
+                            }, headers)
+                        }
+                    }
+                }
+            })
         }
     }
 
