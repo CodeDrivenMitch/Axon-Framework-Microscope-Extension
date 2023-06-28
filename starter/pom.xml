@@ -6,12 +6,12 @@
     <parent>
         <groupId>com.insidion.axon.microscope</groupId>
         <artifactId>axon-framework-microscope-extension-parent</artifactId>
-        <version>0.0.1-SNAPSHOT</version>
+        <version>0.0.1</version>
     </parent>
     <artifactId>axon-microscope-starter</artifactId>
     <name>Microscope Extension Starter</name>
 
-    <version>0.0.1-SNAPSHOT</version>
+    <version>0.0.1</version>
 
     <modelVersion>4.0.0</modelVersion>
     <packaging>jar</packaging>
