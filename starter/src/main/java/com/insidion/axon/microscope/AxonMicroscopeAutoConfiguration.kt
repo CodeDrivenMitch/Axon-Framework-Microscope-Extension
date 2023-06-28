@@ -89,17 +89,17 @@ class AxonMicroscopeAutoConfiguration {
         return ManagedChannelCustomizer { t ->
             t.intercept(object : ClientInterceptor {
                 override fun <ReqT : Any?, RespT : Any?> interceptCall(method: MethodDescriptor<ReqT, RespT>, callOptions: CallOptions?, next: Channel): ClientCall<ReqT, RespT> {
-                    val span = spanFactory.createInternalSpan { """Grpc ${method.type.name} ${method.fullMethodName}""" }
-                    val startTime = System.currentTimeMillis()
+                    val name = method.bareMethodName ?: method.fullMethodName
+                    val span = spanFactory.createInternalSpan { """Grpc $name""" }
                     return object : ForwardingClientCall.SimpleForwardingClientCall<ReqT, RespT>(next.newCall(method, callOptions)) {
-                        override fun start(responseListener: Listener<RespT>, headers: io.grpc.Metadata?) {
+                        override fun start(responseListener: Listener<RespT>, headers: Metadata?) {
+                            val startTime = System.currentTimeMillis()
                             span.start()
                             super.start(object : SimpleForwardingClientCallListener<RespT>(responseListener) {
-
-                                override fun onClose(status: Status?, trailers: io.grpc.Metadata?) {
+                                override fun onClose(status: Status?, trailers: Metadata?) {
                                     span.end()
                                     metricFactory.createTimer("grpc_duration",
-                                            Tags.of(Tag.of("method", method.fullMethodName), Tag.of("type", method.type.name))
+                                            Tags.of(Tag.of("method", name), Tag.of("type", method.type.name))
                                     ).record(Duration.ofMillis(System.currentTimeMillis() - startTime))
                                     super.onClose(status, trailers)
                                 }
