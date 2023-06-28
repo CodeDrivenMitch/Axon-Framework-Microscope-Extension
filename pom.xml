@@ -7,7 +7,7 @@
 
     <groupId>com.insidion.axon.microscope</groupId>
     <artifactId>axon-framework-microscope-extension-parent</artifactId>
-    <version>0.0.1</version>
+    <version>0.0.2-SNAPSHOT</version>
 
     <name>Axon Framework Microscope Extension POM</name>
     <description>This project enabled people to gain more insight into performance bottlenecks in their application</description>

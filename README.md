@@ -49,6 +49,7 @@ The following additional traces have been added:
 - Traces have been added for the `AxonServerQueryBus` and `AxonServerCommandBus` to trace the duration it was scheduled
   in the work queue.
 - All `Serializer.serialize` and `Serializer.deserialize` invocations have had traces added
+- All Grpc methods for the AxonServer connector have had traces added
 
 You can see the effect in the following picture, where we can see the command being stuck in the queue for a while. Note
 that the Serializer invocations are very fast, and we can rule them out as bottleneck.
@@ -86,5 +87,7 @@ A lot of additional metrics have been added. These include:
 - Processor metrics
   - `eventProcessor.segments.claimed` - Percentage of claimed segments. Sum over all instances, should become 1
   - `eventProcessor.dlq.size` - Size of the DLQ
+- Grpc Metrics
+  - `grpc.duration` - Seconds it took to fully complete a grpc call
 
 Replace `$componentName` with the name of the component, such as `eventProcessor` or `commandBus`
