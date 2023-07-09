@@ -27,6 +27,11 @@ You only need to add this starter to your Spring Boot project:
 </dependency>
 ```
 
+The extension is disabled by default. Add the following property to enable it:
+```properties
+com.insidion.axon.microscope
+```
+
 Non-Spring projects are not supported, for now. If you want I can add that, please create an issue.
 Both Spring Boot 2 and 3 are supported.
 

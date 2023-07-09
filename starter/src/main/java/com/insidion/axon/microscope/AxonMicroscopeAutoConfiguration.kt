@@ -36,6 +36,7 @@ import org.axonframework.tracing.SpanFactory
 import org.axonframework.tracing.opentelemetry.OpenTelemetrySpanFactory
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.config.BeanPostProcessor
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.ComponentScan
 import org.springframework.context.annotation.Configuration
@@ -48,6 +49,7 @@ import org.axonframework.config.Configuration as AxonConfiguration
 
 @Configuration
 @ComponentScan("com.insidion.axon.microscope")
+@ConditionalOnProperty(name = ["axon.microscope.enabled"], havingValue = "true", matchIfMissing = true)
 class AxonMicroscopeAutoConfiguration {
     private val logger = LoggerFactory.getLogger("Microscope")
     private val interceptor = MessageDispatchInterceptor { _ -> BiFunction { _, m: Message<*> -> m.andMetaData(mapOf(METADATA_FIELD to System.currentTimeMillis())) } }
