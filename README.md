@@ -23,13 +23,13 @@ You only need to add this starter to your Spring Boot project:
 <dependency>
   <groupId>com.insidion.axon.microscope</groupId>
   <artifactId>axon-microscope-starter</artifactId>
-  <version>0.0.1</version>
+  <version>0.0.3</version>
 </dependency>
 ```
 
 The extension is disabled by default. Add the following property to enable it:
 ```properties
-com.insidion.axon.microscope
+axon.microscope.enabled=true
 ```
 
 Non-Spring projects are not supported, for now. If you want I can add that, please create an issue.
