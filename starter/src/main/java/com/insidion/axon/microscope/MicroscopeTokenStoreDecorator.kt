@@ -38,4 +38,8 @@ class MicroscopeTokenStoreDecorator(
                     delegate.extendClaim(processorName, segment)
                 }
     }
+
+    override fun requiresExplicitSegmentInitialization(): Boolean {
+        return delegate.requiresExplicitSegmentInitialization()
+    }
 }

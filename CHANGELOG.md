@@ -1,5 +1,8 @@
 # Changelog
 
+# 0.0.4
+Fix token store delegation not requiring segment creation
+
 ## 0.0.3
 Disable extension by default. It can be enabled by setting `axon.microscope.enabled=true`
 
