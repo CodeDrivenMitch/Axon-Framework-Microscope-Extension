@@ -38,7 +38,7 @@
         <spring.version>5.3.23</spring.version>
         <kotlin.version>1.7.10</kotlin.version>
         <spring-boot.version>2.7.5</spring-boot.version>
-        <dokka.version>1.4.32</dokka.version>
+        <dokka.version>1.9.0</dokka.version>
     </properties>
 
     <modules>
