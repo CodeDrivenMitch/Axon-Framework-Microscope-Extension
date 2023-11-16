@@ -13,6 +13,7 @@ import java.util.concurrent.ThreadPoolExecutor
 @Component
 class MicroscopeCapacityExposingBean(
         meterRegistry: MeterRegistry,
+        configurationRegistry: MicroscopeConfigurationRegistry,
         commandBus: CommandBus,
         queryBus: QueryBus,
 ) {
@@ -22,6 +23,7 @@ class MicroscopeCapacityExposingBean(
             val executor = ReflectionUtils.getFieldValue<ExecutorService>(executorField, commandBus)
             if (executor is ThreadPoolExecutor) {
                 meterRegistry.gauge("commandBus_capacity_total", executor.corePoolSize)
+                configurationRegistry.registerConfigurationValue("commandBus_capacity", "${executor.corePoolSize}")
             }
         }
         if (queryBus is AxonServerQueryBus) {
@@ -29,6 +31,7 @@ class MicroscopeCapacityExposingBean(
             val executor = ReflectionUtils.getFieldValue<ExecutorService>(executorField, queryBus)
             if (executor is ThreadPoolExecutor) {
                 meterRegistry.gauge("queryBus_capacity_total", executor.corePoolSize)
+                configurationRegistry.registerConfigurationValue("queryBus_capacity", "${executor.corePoolSize}")
             }
         }
     }

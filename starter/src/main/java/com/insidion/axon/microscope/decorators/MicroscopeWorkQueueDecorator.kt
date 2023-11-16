@@ -1,5 +1,9 @@
-package com.insidion.axon.microscope
+package com.insidion.axon.microscope.decorators
 
+import com.insidion.axon.microscope.InstrumentUtils
+import com.insidion.axon.microscope.MicroscopeEventRecorder
+import com.insidion.axon.microscope.MicroscopeMetricFactory
+import com.insidion.axon.microscope.TRACE_METADATA_KEY
 import io.micrometer.core.instrument.Tags
 import org.axonframework.axonserver.connector.PriorityRunnable
 import org.axonframework.messaging.Message
@@ -17,15 +21,16 @@ import java.util.function.Function
  *
  */
 class MicroscopeWorkQueueDecorator(
-        private val prefix: String,
-        private val delegate: BlockingQueue<Runnable>,
-        private val metricFactory: MicroscopeMetricFactory,
-        private val messageSupplier: Function<PriorityRunnable, Message<*>?>,
-        private val metadataFieldName: String,
-        private val spanFactory: SpanFactory,
+    private val prefix: String,
+    private val delegate: BlockingQueue<Runnable>,
+    private val metricFactory: MicroscopeMetricFactory,
+    private val eventRecorder: MicroscopeEventRecorder,
+    private val messageSupplier: Function<PriorityRunnable, Message<*>?>,
+    private val spanFactory: SpanFactory,
 ) : BlockingQueue<Runnable> by delegate {
     private val ingestTime: MutableMap<String, Long> = ConcurrentHashMap()
     private val spans: MutableMap<String, Span> = ConcurrentHashMap()
+    private val recordings: MutableMap<String, MicroscopeEventRecorder.RecordCallback> = ConcurrentHashMap()
 
     private fun measureTake(runnable: Runnable): Runnable {
         try {
@@ -39,6 +44,10 @@ class MicroscopeWorkQueueDecorator(
                         tags = Tags.of(TagsUtil.PAYLOAD_TYPE_TAG, message.payloadType.simpleName)
                 ).record(System.currentTimeMillis() - ingestTime[message.identifier]!!, TimeUnit.MILLISECONDS)
                 ingestTime.remove(message.identifier)
+                if(recordings.containsKey(message.identifier)) {
+                    recordings[message.identifier]?.end()
+                    recordings.remove(message.identifier)
+                }
                 val currentSpan = spans[message.identifier] ?: return runnable
                 val handlingSpan = currentSpan.makeCurrent().use {
                     spanFactory.createInternalSpan({ "Handling" }, message)
@@ -65,8 +74,8 @@ class MicroscopeWorkQueueDecorator(
                 return
             }
             val message = messageSupplier.apply(runnable)
-            if (message != null && message.metaData.containsKey(metadataFieldName)) {
-                val time = message.metaData[metadataFieldName] as Long?
+            if (message != null && message.metaData.containsKey(InstrumentUtils.METADATA_FIELD)) {
+                val time = message.metaData[InstrumentUtils.METADATA_FIELD] as Long?
                 metricFactory.createTimer(
                         name = "$prefix.ingest.latency",
                         tags = Tags.of(TagsUtil.PAYLOAD_TYPE_TAG, message.payloadType.simpleName)
@@ -74,6 +83,10 @@ class MicroscopeWorkQueueDecorator(
                 ingestTime[message.identifier] = System.currentTimeMillis()
 
                 spans[message.identifier] = spanFactory.createHandlerSpan({ "WorkQueue" }, message, true).start()
+            }
+
+            if(message != null && message.metaData.containsKey(TRACE_METADATA_KEY)) {
+                recordings[message.identifier] = eventRecorder.recordEvent("WorkQueue", msg = message)
             }
         } catch (e: Exception) {
             println("Error: ${e.message}")
