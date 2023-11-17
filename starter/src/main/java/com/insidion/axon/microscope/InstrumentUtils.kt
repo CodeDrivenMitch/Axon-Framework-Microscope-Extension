@@ -18,7 +18,6 @@ import org.axonframework.tracing.SpanFactory
 import java.util.concurrent.*
 
 object InstrumentUtils {
-    const val METADATA_FIELD = "microscope_time"
     private val taskField = PriorityRunnable::class.java.getDeclaredField("task")
 
     fun instrument(bean: AxonServerCommandBus, metricFactory: MicroscopeMetricFactory, eventRecorder: MicroscopeEventRecorder, spanFactory: SpanFactory) {

@@ -1,6 +1,6 @@
 package com.insidion.axon.microscope.monitors
 
-import com.insidion.axon.microscope.MicroscopeMetricFactory
+import com.insidion.axon.microscope.*
 import io.micrometer.core.instrument.Tags
 import org.axonframework.eventhandling.EventMessage
 import org.axonframework.messaging.Message
@@ -12,34 +12,40 @@ import org.axonframework.monitoring.NoOpMessageMonitorCallback
 import java.util.concurrent.TimeUnit
 
 class MicroscopeLatencyMessageMonitor(
+    private val alertRecorder: MicroscopeAlertRecorder,
+    private val alertProperties: AlertConfigurationProperties,
     private val componentName: String,
     private val metricFactory: MicroscopeMetricFactory,
-    private val metadataField: String,
     private val tagsBuilder: (Message<*>) -> Tags,
 ) : MessageMonitor<Message<*>> {
     override fun onMessageIngested(message: Message<*>): MonitorCallback {
         val timestampFromMessage = getTimestampFromMessage(message)
-        if (timestampFromMessage > 0) {
+        if (timestampFromMessage != null) {
             val tags = tagsBuilder.invoke(message)
+            val ingestTime = System.currentTimeMillis() - timestampFromMessage
+            if (alertProperties.ingestLatency != -1L && ingestTime > alertProperties.ingestLatency) {
+                alertRecorder.reportAlert(
+                    componentName,
+                    "Ingest latency > ${alertProperties.commitLatency} for message ${message.identifier} of type ${message.payloadType.simpleName}"
+                )
+            }
             metricFactory.createTimer("$componentName.latency.ingest", tags)
-                .record(System.currentTimeMillis() - timestampFromMessage, TimeUnit.MILLISECONDS)
+                .record(ingestTime, TimeUnit.MILLISECONDS)
 
             CurrentUnitOfWork.ifStarted { uow: UnitOfWork<*> ->
                 uow.afterCommit { _ ->
+                    val commitLatency = System.currentTimeMillis() - timestampFromMessage
+                    if (alertProperties.commitLatency != -1L && commitLatency > alertProperties.commitLatency) {
+                        alertRecorder.reportAlert(
+                            componentName,
+                            "Commit latency > ${alertProperties.commitLatency} for message ${message.identifier} of type ${message.payloadType.simpleName}"
+                        )
+                    }
                     metricFactory.createTimer("$componentName.latency.commit", tags)
-                        .record(System.currentTimeMillis() - timestampFromMessage, TimeUnit.MILLISECONDS)
+                        .record(commitLatency, TimeUnit.MILLISECONDS)
                 }
             }
         }
         return NoOpMessageMonitorCallback.INSTANCE
-    }
-
-    private fun getTimestampFromMessage(message: Message<*>): Long {
-        if (message is EventMessage<*>) {
-            return message.timestamp.toEpochMilli()
-        }
-        return if (message.metaData.containsKey(metadataField)) {
-            message.metaData[metadataField] as Long
-        } else -1
     }
 }

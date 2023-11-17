@@ -39,7 +39,8 @@ class MicroscopeEventRecorder {
         val event = MicroscopeEvent(
             name = name,
             timestampStart = currentTime,
-            message = message,
+            messageType = message?.payloadType?.simpleName,
+            messageIdentifier = message?.identifier,
             eventProcessor = processorDetails,
             timestampStartEnd = null,
             parent = parent
@@ -47,11 +48,12 @@ class MicroscopeEventRecorder {
 
 
         currentDeque.addFirst(event)
+        val bucket = currentTime / 60000
         eventRegistry
             .computeIfAbsent(currentTime / 60000) {
-                // New section; clean up older than 5 seconds
+                // New section; clean up older than 5 minutes
                 eventRegistry.keys().iterator().forEach {
-                    if (it < currentTime / 60000 - 5) {
+                    if (it < bucket - 5) {
                         eventRegistry.remove(it)
                     }
                 }

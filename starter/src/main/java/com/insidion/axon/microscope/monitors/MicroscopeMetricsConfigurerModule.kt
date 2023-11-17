@@ -32,14 +32,16 @@ import java.util.function.Consumer
 import java.util.function.ToDoubleFunction
 
 class MicroscopeMetricsConfigurerModule(
+    private val alertRecorder: MicroscopeAlertRecorder,
     private val metricFactory: MicroscopeMetricFactory,
-    private val eventRecorder: MicroscopeEventRecorder
+    private val eventRecorder: MicroscopeEventRecorder,
+    private val alertConfigurationProperties: AlertConfigurationProperties,
 ) : MetricsConfigurerModule(GlobalMetricRegistry(metricFactory.meterRegistry)) {
     private val interceptor = MessageDispatchInterceptor { _ ->
         BiFunction { _, m: Message<*> ->
             m.andMetaData(
                 mapOf(
-                    InstrumentUtils.METADATA_FIELD to System.currentTimeMillis(),
+                    TIME_METADATA_KEY to System.currentTimeMillis(),
                     TRACE_METADATA_KEY to eventRecorder.currentIdentifier(),
                 )
             )
@@ -59,14 +61,14 @@ class MicroscopeMetricsConfigurerModule(
     }
 
     override fun configureModule(c: Configurer) {
-        c.configureMessageMonitor(EventStore::class.java, createEventStoreMonitorFactory(metricFactory))
+        c.configureMessageMonitor(EventStore::class.java, createEventStoreMonitorFactory())
         c.configureMessageMonitor(
             StreamingEventProcessor::class.java,
-            createEventProcessorMonitorFactory(metricFactory, eventRecorder)
+            createEventProcessorMonitorFactory()
         )
-        c.configureMessageMonitor(CommandBus::class.java, createCommandBusMonitorFactory(metricFactory))
-        c.configureMessageMonitor(QueryBus::class.java, createQueryBusMonitorFactory(metricFactory))
-        c.configureMessageMonitor(QueryUpdateEmitter::class.java, createQueryUpdateEmitterMonitorFactory(metricFactory))
+        c.configureMessageMonitor(CommandBus::class.java, createCommandBusMonitorFactory())
+        c.configureMessageMonitor(QueryBus::class.java, createQueryBusMonitorFactory())
+        c.configureMessageMonitor(QueryUpdateEmitter::class.java, createQueryUpdateEmitterMonitorFactory())
         c.onInitialize { conf: Configuration ->
             conf.onStart {
                 conf.commandBus().registerDispatchInterceptor(interceptor)
@@ -76,11 +78,11 @@ class MicroscopeMetricsConfigurerModule(
                 conf.queryBus().registerHandlerInterceptor(handlerInterceptor)
                 conf.eventStore().registerDispatchInterceptor(interceptor)
                 conf.findModules(AggregateConfiguration::class.java)
-                    .forEach(Consumer { ac: AggregateConfiguration<*> -> instrumentRepository(metricFactory, ac) })
+                    .forEach(Consumer { ac: AggregateConfiguration<*> -> instrumentRepository(ac) })
                 conf.eventProcessingConfiguration().eventProcessors()
                     .forEach { (s: String, eventProcessor: EventProcessor?) ->
                         if (eventProcessor is StreamingEventProcessor) {
-                            instrumentProcessorSegmentClaimed(metricFactory, conf, s, eventProcessor)
+                            instrumentProcessorSegmentClaimed(conf, s, eventProcessor)
                         }
                         eventProcessor.registerHandlerInterceptor(handlerInterceptor)
                         eventProcessor.registerHandlerInterceptor(
@@ -93,25 +95,22 @@ class MicroscopeMetricsConfigurerModule(
         }
     }
 
-    private fun instrumentRepository(metricFactory: MicroscopeMetricFactory, ac: AggregateConfiguration<*>) {
+    private fun instrumentRepository(ac: AggregateConfiguration<*>) {
         val repository = ac.repository()
         if (repository is EventSourcingRepository<*>) {
             InstrumentUtils.instrument(repository, metricFactory, ac)
         }
     }
 
-    private fun createEventStoreMonitorFactory(meterRegistry: MicroscopeMetricFactory): MessageMonitorFactory {
+    private fun createEventStoreMonitorFactory(): MessageMonitorFactory {
         return MessageMonitorFactory { _, _, componentName: String ->
-            val latencyMonitor = genericLatencyMonitor(meterRegistry, "eventStore", componentName)
-            val messageCountingMonitor = genericMessageCounter(meterRegistry, componentName)
+            val latencyMonitor = genericLatencyMonitor("eventStore", componentName)
+            val messageCountingMonitor = genericMessageCounter(componentName)
             MultiMessageMonitor(latencyMonitor, messageCountingMonitor)
         }
     }
 
-    private fun createEventProcessorMonitorFactory(
-        metricFactory: MicroscopeMetricFactory,
-        eventRecorder: MicroscopeEventRecorder
-    ): MessageMonitorFactory {
+    private fun createEventProcessorMonitorFactory(): MessageMonitorFactory {
         return MessageMonitorFactory { _, componentType: Class<*>, componentName: String ->
             val monitors: MutableList<MessageMonitor<in Message<*>>> = ArrayList()
             monitors.add(
@@ -144,7 +143,7 @@ class MicroscopeMetricsConfigurerModule(
                 ) {
                     Tags.of(TagsUtil.PROCESSOR_NAME_TAG, componentName)
                 })
-            monitors.add(genericLatencyMonitor(metricFactory, componentType.simpleName, componentName))
+            monitors.add(genericLatencyMonitor(componentType.simpleName, componentName))
             monitors.add(EventProcessorLatencyMonitor
                 .builder()
                 .meterRegistry(metricFactory.meterRegistry)
@@ -159,9 +158,9 @@ class MicroscopeMetricsConfigurerModule(
         }
     }
 
-    private fun createCommandBusMonitorFactory(metricFactory: MicroscopeMetricFactory): MessageMonitorFactory {
+    private fun createCommandBusMonitorFactory(): MessageMonitorFactory {
         return MessageMonitorFactory { _, componentType: Class<*>, componentName: String ->
-            val messageCounter = genericMessageCounter(metricFactory, componentName)
+            val messageCounter = genericMessageCounter(componentName)
             val messageTimer = MessageTimerMonitor
                 .builder()
                 .timerCustomization { timer: Timer.Builder ->
@@ -184,14 +183,14 @@ class MicroscopeMetricsConfigurerModule(
                 1,
                 TimeUnit.MINUTES
             ) { message: Message<*> -> Tags.empty() }
-            val latencyMonitor = genericLatencyMonitor(metricFactory, componentType.simpleName, componentName)
+            val latencyMonitor = genericLatencyMonitor(componentType.simpleName, componentName)
             MultiMessageMonitor(messageCounter, messageTimer, capacityMonitor1Minute, latencyMonitor)
         }
     }
 
-    private fun createQueryBusMonitorFactory(metricFactory: MicroscopeMetricFactory): MessageMonitorFactory {
+    private fun createQueryBusMonitorFactory(): MessageMonitorFactory {
         return MessageMonitorFactory { _, componentType: Class<*>, componentName: String ->
-            val messageCounter = genericMessageCounter(metricFactory, componentName)
+            val messageCounter = genericMessageCounter(componentName)
             val messageTimer = MessageTimerMonitor
                 .builder()
                 .timerCustomization { timer: Timer.Builder -> timer.distributionStatisticExpiry(Duration.ofMinutes(1)) }
@@ -207,14 +206,14 @@ class MicroscopeMetricsConfigurerModule(
             val capacityMonitor1Minute = CapacityMonitor.buildMonitor(
                 componentName, metricFactory.meterRegistry
             ) { message: Message<*> -> Tags.empty() }
-            val latencyMonitor = genericLatencyMonitor(metricFactory, componentType.simpleName, componentName)
+            val latencyMonitor = genericLatencyMonitor(componentType.simpleName, componentName)
             MultiMessageMonitor(messageCounter, messageTimer, capacityMonitor1Minute, latencyMonitor)
         }
     }
 
-    private fun createQueryUpdateEmitterMonitorFactory(metricFactory: MicroscopeMetricFactory): MessageMonitorFactory {
+    private fun createQueryUpdateEmitterMonitorFactory(): MessageMonitorFactory {
         return MessageMonitorFactory { _, componentType: Class<*>, componentName: String ->
-            val messageCounter = genericMessageCounter(metricFactory, componentName)
+            val messageCounter = genericMessageCounter(componentName)
             val messageTimer = MessageTimerMonitor
                 .builder()
                 .timerCustomization { timer: Timer.Builder -> timer.distributionStatisticExpiry(Duration.ofMinutes(1)) }
@@ -227,13 +226,12 @@ class MicroscopeMetricsConfigurerModule(
                     )
                 }
                 .build()
-            val latencyMonitor = genericLatencyMonitor(metricFactory, componentType.simpleName, componentName)
+            val latencyMonitor = genericLatencyMonitor(componentType.simpleName, componentName)
             MultiMessageMonitor(messageCounter, messageTimer, latencyMonitor)
         }
     }
 
     private fun genericMessageCounter(
-        metricFactory: MicroscopeMetricFactory,
         componentName: String
     ): MessageCountingMonitor {
         return MessageCountingMonitor.buildMonitor(
@@ -242,19 +240,18 @@ class MicroscopeMetricsConfigurerModule(
     }
 
     private fun genericLatencyMonitor(
-        meterRegistry: MicroscopeMetricFactory,
         componentType: String,
         componentName: String
     ): MicroscopeLatencyMessageMonitor {
         return MicroscopeLatencyMessageMonitor(
+            alertRecorder,
+            alertConfigurationProperties,
             componentType,
-            meterRegistry,
-            InstrumentUtils.METADATA_FIELD
+            metricFactory,
         ) { message: Message<*> -> Tags.of("componentName", componentName) }
     }
 
     private fun instrumentProcessorSegmentClaimed(
-        metricFactory: MicroscopeMetricFactory,
         conf: Configuration,
         s: String,
         streamingEventProcessor: StreamingEventProcessor

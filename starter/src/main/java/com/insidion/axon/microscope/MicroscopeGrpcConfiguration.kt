@@ -18,25 +18,22 @@ import java.time.Duration
 @ComponentScan("com.insidion.axon.microscope")
 @ConditionalOnProperty(name = ["axon.microscope.enabled"], havingValue = "true", matchIfMissing = true)
 class MicroscopeGrpcConfiguration {
-    private val logger = LoggerFactory.getLogger("Microscope")
-
     @Bean
     @Primary
-    fun channelCustomizer2(
+    fun channelCustomizer(
         metricFactory: MicroscopeMetricFactory,
         eventRecorder: MicroscopeEventRecorder,
         spanFactory: SpanFactory
     ): ManagedChannelCustomizer {
         return ManagedChannelCustomizer { t ->
             t.intercept(object : ClientInterceptor {
-
                 override fun <ReqT : Any?, RespT : Any?> interceptCall(
                     method: MethodDescriptor<ReqT, RespT>,
                     callOptions: CallOptions?,
                     next: Channel
                 ): ClientCall<ReqT, RespT> {
                     val name = method.bareMethodName ?: method.fullMethodName
-                    val recording = if (!name.contains("OpenStream")) eventRecorder.recordEvent("grpc.$name") else null
+                    val recording = if (!name.contains("OpenStream") && !name.contains("ListEvents")) eventRecorder.recordEvent("grpc.$name") else null
                     return object : ForwardingClientCall.SimpleForwardingClientCall<ReqT, RespT>(
                         next.newCall(
                             method,

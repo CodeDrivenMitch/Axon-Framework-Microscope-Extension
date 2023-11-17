@@ -1,9 +1,6 @@
 package com.insidion.axon.microscope.decorators
 
-import com.insidion.axon.microscope.InstrumentUtils
-import com.insidion.axon.microscope.MicroscopeEventRecorder
-import com.insidion.axon.microscope.MicroscopeMetricFactory
-import com.insidion.axon.microscope.TRACE_METADATA_KEY
+import com.insidion.axon.microscope.*
 import io.micrometer.core.instrument.Tags
 import org.axonframework.axonserver.connector.PriorityRunnable
 import org.axonframework.messaging.Message
@@ -74,8 +71,8 @@ class MicroscopeWorkQueueDecorator(
                 return
             }
             val message = messageSupplier.apply(runnable)
-            if (message != null && message.metaData.containsKey(InstrumentUtils.METADATA_FIELD)) {
-                val time = message.metaData[InstrumentUtils.METADATA_FIELD] as Long?
+            if (message != null && message.metaData.containsKey(TIME_METADATA_KEY)) {
+                val time = message.metaData[TIME_METADATA_KEY] as Long?
                 metricFactory.createTimer(
                         name = "$prefix.ingest.latency",
                         tags = Tags.of(TagsUtil.PAYLOAD_TYPE_TAG, message.payloadType.simpleName)
