@@ -4,6 +4,7 @@ import com.insidion.axon.microscope.MicroscopeEventRecorder
 import org.axonframework.eventhandling.Segment
 import org.axonframework.eventhandling.TrackingToken
 import org.axonframework.eventhandling.tokenstore.TokenStore
+import java.util.*
 
 class MicroscopeTokenStoreDecorator(
     private val delegate: TokenStore,
@@ -36,5 +37,29 @@ class MicroscopeTokenStoreDecorator(
 
     override fun requiresExplicitSegmentInitialization(): Boolean {
         return delegate.requiresExplicitSegmentInitialization()
+    }
+
+    override fun initializeTokenSegments(processorName: String, segmentCount: Int) {
+        delegate.initializeTokenSegments(processorName, segmentCount)
+    }
+
+    override fun initializeTokenSegments(processorName: String, segmentCount: Int, initialToken: TrackingToken?) {
+        delegate.initializeTokenSegments(processorName, segmentCount, initialToken)
+    }
+
+    override fun initializeSegment(token: TrackingToken?, processorName: String, segment: Int) {
+        delegate.initializeSegment(token, processorName, segment)
+    }
+
+    override fun deleteToken(processorName: String, segment: Int) {
+        delegate.deleteToken(processorName, segment)
+    }
+
+    override fun fetchAvailableSegments(processorName: String): MutableList<Segment> {
+        return delegate.fetchAvailableSegments(processorName)
+    }
+
+    override fun retrieveStorageIdentifier(): Optional<String> {
+        return delegate.retrieveStorageIdentifier()
     }
 }

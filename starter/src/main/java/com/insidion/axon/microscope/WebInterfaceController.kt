@@ -8,13 +8,16 @@ import io.micrometer.core.instrument.DistributionSummary
 import io.micrometer.core.instrument.MeterRegistry
 import io.micrometer.core.instrument.distribution.HistogramSupport
 import io.micrometer.prometheus.PrometheusMeterRegistry
+import org.axonframework.messaging.GenericMessage
+import org.axonframework.messaging.responsetypes.PublisherResponseType
 import org.axonframework.messaging.responsetypes.ResponseTypes
-import org.axonframework.queryhandling.GenericQueryMessage
-import org.axonframework.queryhandling.QueryBus
-import org.axonframework.queryhandling.QueryHandler
+import org.axonframework.queryhandling.*
+import org.reactivestreams.Publisher
 import org.springframework.boot.actuate.metrics.export.prometheus.PrometheusScrapeEndpoint
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RestController
+import reactor.core.publisher.Flux
+import reactor.core.publisher.Mono
 import java.lang.management.ManagementFactory
 import java.lang.management.ThreadMXBean
 import java.util.concurrent.TimeUnit
@@ -43,8 +46,8 @@ class WebInterfaceController(
         queryBus.subscribe<String>("$nodeName-alerts", String::class.java) {
             serialize(AlertsResponse(nodeName, alertRecorder.getAlerts()))
         }
-        queryBus.subscribe<String>("$nodeName-events", String::class.java) {
-            serialize(EventsResponse(nodeName, eventRecorder.getEvents()))
+        queryBus.subscribe<Publisher<MicroscopeEvent>>("$nodeName-events", MicroscopeEvent::class.java) {
+            Flux.fromIterable(eventRecorder.getEvents())
         }
         queryBus.subscribe<String>("$nodeName-config", String::class.java) {
             serialize(ConfigurationResponse(nodeName, configurationRegistry.getConfig()))
@@ -66,75 +69,67 @@ class WebInterfaceController(
     }
 
     @RequestMapping("/package")
-    fun getPackage(): CompleteResponse {
-        val nodes = queryBus.scatterGather(
+    fun getPackage(): Flux<NodeResponse> {
+        return Flux.fromIterable(queryBus.scatterGather(
             GenericQueryMessage(
                 MicroscopeNodeQuery(),
                 "microscopeConnectedNodes",
                 ResponseTypes.instanceOf(String::class.java)
             ),
             5000, TimeUnit.MILLISECONDS
-        ).toList()
-
-        val alerts = nodes.map {
-            deserialize(
+        ).toList()).flatMap {
+            val nodeName = it.payload
+            Flux.from(queryBus.streamingQuery(
+                GenericStreamingQueryMessage(
+                    GenericMessage.asMessage(MicroscopeEventQuery()),
+                    "${it.payload}-events",
+                    MicroscopeEvent::class.java
+                )
+            ))
+                .map { m -> m.payload}
+                .collectList()
+                .map { events -> nodeName to events}
+        }.map {
+            val alerts = deserialize(
                 queryBus.query(
                     GenericQueryMessage(
                         MicroscopeAlertQuery(),
-                        "${it.payload}-alerts",
+                        "${it.first}-alerts",
                         ResponseTypes.instanceOf(String::class.java)
                     )
                 ).get().payload, AlertsResponse::class.java
             )
-        }
-
-
-        val events = nodes.map {
-            deserialize(
+            val config = deserialize(
                 queryBus.query(
                     GenericQueryMessage(
                         MicroscopeEventQuery(),
-                        "${it.payload}-events",
-                        ResponseTypes.instanceOf(String::class.java)
-                    )
-                ).get().payload, EventsResponse::class.java
-            )
-        }
-        val configurations = nodes.map {
-            deserialize(
-                queryBus.query(
-                    GenericQueryMessage(
-                        MicroscopeEventQuery(),
-                        "${it.payload}-config",
+                        "${it.first}-config",
                         ResponseTypes.instanceOf(String::class.java)
                     )
                 ).get().payload, ConfigurationResponse::class.java
             )
-        }
-        val stackdumps = nodes.map {
-            deserialize(
+
+            val stackdump =  deserialize(
                 queryBus.query(
                     GenericQueryMessage(
                         MicroscopeEventQuery(),
-                        "${it.payload}-stackdump",
+                        "${it.first}-stackdump",
                         ResponseTypes.instanceOf(String::class.java)
                     )
                 ).get().payload, StackDumpResponse::class.java
             )
-        }
-        val metrics = nodes.map {
-            deserialize(
+
+            val metrics = deserialize(
                 queryBus.query(
                     GenericQueryMessage(
                         MicroscopeEventQuery(),
-                        "${it.payload}-metrics",
+                        "${it.first}-metrics",
                         ResponseTypes.instanceOf(String::class.java)
                     )
                 ).get().payload, MetricsResponse::class.java
             )
+            NodeResponse(nodeName, alerts, it.second, config.configuration, stackdump.stackDump, metrics.metrics)
         }
-
-        return CompleteResponse(alerts, events, configurations, stackdumps, metrics)
     }
 
     private fun threadDump(): String {
@@ -157,11 +152,6 @@ data class AlertsResponse(
     val alerts: List<MicroscopeAlert>
 )
 
-data class EventsResponse(
-    val nodeName: String,
-    val alerts: List<MicroscopeEvent>
-)
-
 data class StackDumpResponse(
     val nodeName: String,
     val stackDump: String,
@@ -172,12 +162,13 @@ data class ConfigurationResponse(
     val configuration: Map<String, String>,
 )
 
-data class CompleteResponse(
-    val alerts: List<AlertsResponse>,
-    val events: List<EventsResponse>,
-    val configurations: List<ConfigurationResponse>,
-    val stackDumps: List<StackDumpResponse>,
-    val metrics: List<MetricsResponse>,
+data class NodeResponse(
+    val nodeName: String,
+    val alerts: AlertsResponse,
+    val events: List<MicroscopeEvent>,
+    val configurations: Map<String, String>,
+    val stackDumps: String,
+    val metrics: String,
 )
 
 data class MetricsResponse(

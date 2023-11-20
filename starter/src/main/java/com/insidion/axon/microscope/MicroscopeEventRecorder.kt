@@ -5,10 +5,12 @@ import com.insidion.axon.microscope.api.MicroscopeEvent
 import org.axonframework.messaging.Message
 import org.axonframework.messaging.unitofwork.CurrentUnitOfWork
 import org.slf4j.LoggerFactory
+import org.springframework.stereotype.Component
 import java.util.*
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CopyOnWriteArrayList
 
+@Component
 class MicroscopeEventRecorder {
     private val logger = LoggerFactory.getLogger("MicroscopeEventRecorder")
 
@@ -61,13 +63,13 @@ class MicroscopeEventRecorder {
             }
             .add(event)
 
-        logger.info("+ $event")
+        logger.debug("+ $event")
         return object : RecordCallback {
             override fun end() {
                 currentEventDeque.get()?.remove(event)
 
                 event.timestampStartEnd = System.currentTimeMillis()
-                logger.info("- $event")
+                logger.debug("- $event")
             }
 
         }

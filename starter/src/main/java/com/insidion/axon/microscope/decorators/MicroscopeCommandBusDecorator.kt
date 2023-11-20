@@ -9,6 +9,10 @@ import org.axonframework.commandhandling.CommandCallback
 import org.axonframework.commandhandling.CommandMessage
 import org.axonframework.commandhandling.CommandResultMessage
 import org.axonframework.common.ReflectionUtils
+import org.axonframework.common.Registration
+import org.axonframework.messaging.MessageDispatchInterceptor
+import org.axonframework.messaging.MessageHandler
+import org.axonframework.messaging.MessageHandlerInterceptor
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.ThreadPoolExecutor
 
@@ -24,7 +28,7 @@ class MicroscopeCommandBusDecorator(
             val executor = ReflectionUtils.getFieldValue<ExecutorService>(executorField, delegate)
             if (executor is ThreadPoolExecutor) {
                 meterRegistry.gauge("commandBus_capacity_total", executor.corePoolSize)
-                configurationRegistry.registerConfigurationValue("commandBus_capacity", "${executor.corePoolSize}")
+                configurationRegistry.registerConfigurationValue("commandBus_capacity") { "${executor.corePoolSize}" }
             }
         }
     }

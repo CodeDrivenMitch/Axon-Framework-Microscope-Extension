@@ -5,9 +5,8 @@ import com.insidion.axon.microscope.MicroscopeEventRecorder
 import io.micrometer.core.instrument.MeterRegistry
 import org.axonframework.axonserver.connector.query.AxonServerQueryBus
 import org.axonframework.common.ReflectionUtils
-import org.axonframework.queryhandling.QueryBus
-import org.axonframework.queryhandling.QueryMessage
-import org.axonframework.queryhandling.QueryResponseMessage
+import org.axonframework.queryhandling.*
+import org.reactivestreams.Publisher
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.ThreadPoolExecutor
@@ -25,7 +24,7 @@ class MicroscopeQueryBusDecorator(
             val executor = ReflectionUtils.getFieldValue<ExecutorService>(executorField, delegate)
             if (executor is ThreadPoolExecutor) {
                 meterRegistry.gauge("queryBus_capacity_total", executor.corePoolSize)
-                configurationRegistry.registerConfigurationValue("queryBus_capacity", "${executor.corePoolSize}")
+                configurationRegistry.registerConfigurationValue("queryBus_capacity") { "${executor.corePoolSize}" }
             }
         }
     }
@@ -36,5 +35,28 @@ class MicroscopeQueryBusDecorator(
             .whenComplete { _, _ ->
                 recording.end()
             }
+    }
+
+    override fun <Q : Any?, R : Any?> streamingQuery(query: StreamingQueryMessage<Q, R>?): Publisher<QueryResponseMessage<R>>? {
+        return delegate.streamingQuery(query)
+    }
+
+    override fun <Q : Any?, I : Any?, U : Any?> subscriptionQuery(query: SubscriptionQueryMessage<Q, I, U>): SubscriptionQueryResult<QueryResponseMessage<I>, SubscriptionQueryUpdateMessage<U>>? {
+        return delegate.subscriptionQuery(query)
+    }
+
+    override fun <Q : Any?, I : Any?, U : Any?> subscriptionQuery(
+        query: SubscriptionQueryMessage<Q, I, U>,
+        backpressure: SubscriptionQueryBackpressure?,
+        updateBufferSize: Int
+    ): SubscriptionQueryResult<QueryResponseMessage<I>, SubscriptionQueryUpdateMessage<U>>? {
+        return delegate.subscriptionQuery(query, backpressure, updateBufferSize)
+    }
+
+    override fun <Q : Any?, I : Any?, U : Any?> subscriptionQuery(
+        query: SubscriptionQueryMessage<Q, I, U>,
+        updateBufferSize: Int
+    ): SubscriptionQueryResult<QueryResponseMessage<I>, SubscriptionQueryUpdateMessage<U>> {
+        return delegate.subscriptionQuery(query, updateBufferSize)
     }
 }

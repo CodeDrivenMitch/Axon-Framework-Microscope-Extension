@@ -34,15 +34,6 @@ class AxonMicroscopeAutoConfiguration {
     fun metricFactory(meterRegistry: MeterRegistry): MicroscopeMetricFactory = MicroscopeMetricFactory(meterRegistry)
 
     @Bean
-    fun configurationRegistry(): MicroscopeConfigurationRegistry = MicroscopeConfigurationRegistry()
-
-    @Bean
-    fun alertRecorder(eventRecorder: MicroscopeEventRecorder) = MicroscopeAlertRecorder(eventRecorder)
-
-    @Bean
-    fun eventRecorder() = MicroscopeEventRecorder()
-
-    @Bean
     fun queueMeasuringBeanPostProcessor(
         metricFactory: MicroscopeMetricFactory,
         eventRecorder: MicroscopeEventRecorder,

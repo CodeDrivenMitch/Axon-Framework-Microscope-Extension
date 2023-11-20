@@ -2,9 +2,11 @@ package com.insidion.axon.microscope
 
 import com.insidion.axon.microscope.api.MicroscopeAlert
 import org.slf4j.LoggerFactory
+import org.springframework.stereotype.Component
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CopyOnWriteArrayList
 
+@Component
 class MicroscopeAlertRecorder(
     private val eventRecorder: MicroscopeEventRecorder,
 ) {

@@ -16,10 +16,10 @@ fun getCurrentKey() = getCurrentResources().keys
 fun getCurrentProcessorName() = getCurrentKey().substringBefore("]/SegmentId").removePrefix("Processor[")
 fun getCurrentSegment() = getCurrentResources().getOrDefault(getCurrentKey(), -1) as Int
 fun getTimestampFromMessage(message: Message<*>): Long? {
-    if (message is EventMessage<*>) {
-        return message.timestamp.toEpochMilli()
-    }
+
     return if (message.metaData.containsKey(TIME_METADATA_KEY)) {
         message.metaData[TIME_METADATA_KEY] as Long
+    } else if (message is EventMessage<*>) {
+        return message.timestamp.toEpochMilli()
     } else null
 }
